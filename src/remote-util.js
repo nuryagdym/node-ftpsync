@@ -26,6 +26,8 @@ class RemoteUtil {
     _verbose;
     _logger;
 
+    totalDownloadedSize = 0;
+
     /**
      * @param {Client} ftp FTP connection
      * @param {string} basePath path on remote connection
@@ -101,20 +103,21 @@ class RemoteUtil {
     }
 
     /**
-     * @param {string} file
+     * @param {{id: string, size: number}} file
      * @param {function} callback
      * download a file from the remote server
      */
     download = (file, callback) => {
-        const local = this._basePath + file;
-        const remote = this._localBasePath + file;
+        const local = this._basePath + file.id;
+        const remote = this._localBasePath + file.id;
         if (this._verbose) {
             this._logger.info("downloading: ", local, remote);
         }
         this._ftp.downloadTo(remote, local).then(() => {
             if (this._verbose) {
-                this._logger.info("-", file, "downloaded successfully");
+                this._logger.info("-", file.id, "downloaded successfully");
             }
+            this.totalDownloadedSize += file.size;
             callback(null, file);
         }).catch((err) => {
             this._logger.error("ftp.get failed.", err);

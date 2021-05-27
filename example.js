@@ -23,6 +23,10 @@ let config = {
 
 const synchronizer = new Sync(config, console);
 
+const interval = setInterval(() => {
+    console.log("synchronizer status", synchronizer.getUpdateStatus());
+}, 5000)
 synchronizer.run((err, results) => {
-    console.log("run response", results);
+    clearInterval(interval);
+    console.log("run response", synchronizer.getUpdateStatus());
 })

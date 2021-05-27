@@ -5,6 +5,7 @@ const RemoteUtil = require("./remote-util");
 
 class Sync {
     settings;
+    ftpConnectionConfig;
 
     /**
      * @type {Client}
@@ -26,20 +27,36 @@ class Sync {
         files: []
     };
 
+    /**
+     * @type {string[]}
+     */
     mkdirQueue = [];
+    /**
+     * @type {string[]}
+     */
     rmdirQueue = [];
-    addQueue = [];
-    updateQueue = [];
+    /**
+     * @type {{id: string, size: number, time: Date}[]}
+     */
+    addFileQueue = [];
+    /**
+     * @type {{id: string, size: number, time: Date}[]}
+     */
+    updateFileQueue = [];
+    /**
+     * @type {{id: string, size: number, time: Date}[]}
+     */
     removeFileQueue = [];
+
+    totalDownloadSize = 0;
+    totalNumOfChanges = 0;
+    totalLocalSize = 0;
+    totalRemoteSize = 0;
 
     logger;
 
     constructor(config, logger) {
         this.settings = {
-            "host": config.host,
-            "port": config.port || 21,
-            "user": config.user || "anonymous",
-            "pass": config.pass || "guest",
             "local": config.local || process.cwd(),
             "remote": config.remote || "/",
             "ignore": config.ignore || [],
@@ -47,6 +64,17 @@ class Sync {
             "connections": config.connections || 1,
             "verbose": config.verbose || false,
         };
+
+        this.ftpConnectionConfig = {
+            "host": config.host,
+            "port": config.port || 21,
+            "user": config.user || "anonymous",
+            "password": config.pass || "guest",
+            keepalive: 30000,
+        }
+
+        // create the ftp instance
+        this.ftpConnection = new BasicFTP.Client();
 
         this.logger = logger;
     }
@@ -62,27 +90,29 @@ class Sync {
             this.logger.info("Settings:", this.settings);
         }
 
-        // create the ftp instance
-        this.ftpConnection = new BasicFTP.Client();
         //this.ftpConnection.ftp.verbose = this.settings.verbose;
-        this.ftpConnection.access({
-            host: this.settings.host,
-            port: this.settings.port,
-            user: this.settings.user,
-            password: this.settings.pass,
-            keepalive: 30000,
-        }).then(() => {
-            this.logger.debug("Setup complete.");
+        this.ftpConnection.access(this.ftpConnectionConfig).then(() => {
             this.localUtil = new LocalUtil(this.settings.local, this.settings.ignore, this.logger, this.settings.verbose);
             this.remoteUtil = new RemoteUtil(this.ftpConnection, this.settings.remote, this.settings.local, this.settings.ignore, this.logger, this.settings.verbose);
+            this.logger.debug("Setup complete.");
             callback(null);
         }).catch((err) => {
-            this.logger.error("Setup failed.");
+            this.logger.error("Setup failed.", err);
             callback("error", err);
         })
     }
 
     collect = (callback) => {
+        this.totalLocalSize = 0;
+        this.totalRemoteSize = 0;
+        this.local = {
+            dirs: [],
+            files: []
+        };
+        this.remote = {
+            dirs: [],
+            files: []
+        };
         this.logger.debug("Collecting");
         if (this.settings.verbose) {
             this.logger.info("-------------------------------------------------------------");
@@ -104,6 +134,9 @@ class Sync {
             this.local = results[0];
             this.remote = results[1];
 
+            this.totalLocalSize = this.sumFileSizes(this.local.files);
+            this.totalRemoteSize = this.sumFileSizes(this.remote.files);
+
             if (this.settings.verbose) {
                 this.logger.info("Local:", this.local);
                 this.logger.info("Remote:", this.remote);
@@ -114,6 +147,8 @@ class Sync {
     }
 
     consolidate = (callback) => {
+        this.totalDownloadSize = 0;
+        this.totalNumOfChanges = 0;
         this.logger.debug("Consolidating");
         if (this.settings.verbose) {
             this.logger.info("-------------------------------------------------------------");
@@ -125,19 +160,23 @@ class Sync {
         const localFiles = this.filtersFilesInGivenDirs(this.local.files, this.rmdirQueue);
 
         this.consolidateFiles(this.remote.files, localFiles);
+        this.totalDownloadSize = this.calculateTotalDownloadSize();
+        this.totalNumOfChanges = this.calculateTotalNumberOfChanges();
+
         this.logger.debug(`Mkdir ${this.mkdirQueue.length} directories:`);
         this.logger.debug(`Rmdir ${this.rmdirQueue.length} directories:`);
-        this.logger.debug(`Add ${this.addQueue.length} files:`);
-        this.logger.debug(`Updates ${this.updateQueue.length} files`);
+        this.logger.debug(`Add ${this.addFileQueue.length} files:`);
+        this.logger.debug(`Updates ${this.updateFileQueue.length} files`);
         this.logger.debug(`Remove ${this.removeFileQueue.length} files`);
+        this.logger.debug("Consolidate status", this.getUpdateStatus());
 
         // log the results
         if (this.settings.verbose) {
-            this.logger.info('Make dir queue', this.mkdirQueue);
-            this.logger.info('Remove dir queue', this.rmdirQueue);
-            this.logger.info('Add file queue', this.addQueue);
-            this.logger.info('Update file queue', this.updateQueue);
-            this.logger.info('Remove file queue', this.removeFileQueue);
+            this.logger.info("Make dir queue", this.mkdirQueue);
+            this.logger.info("Remove dir queue", this.rmdirQueue);
+            this.logger.info("Add file queue", this.addFileQueue);
+            this.logger.info("Update file queue", this.updateFileQueue);
+            this.logger.info("Remove file queue", this.removeFileQueue);
         }
         this.logger.debug("Consolidation complete.");
         callback(null);
@@ -183,6 +222,34 @@ class Sync {
         ], callback);
     }
 
+    getUpdateStatus = () => {
+        return {
+            numOfChanges: this.totalNumOfChanges,
+            numOfLocalFiles: this.local.files.length,
+            numOfRemoteFiles: this.remote.files.length,
+            totalDownloadSize: this.totalDownloadSize,
+            totalDownloadedSize: this.remoteUtil.totalDownloadedSize,
+            totalLocalSize: this.totalLocalSize,
+            totalRemoteSize: this.totalRemoteSize,
+        }
+    }
+
+    reset = () => {
+        this.totalNumOfChanges = 0;
+        this.totalLocalSize = 0;
+        this.totalRemoteSize = 0;
+        this.remoteUtil.totalDownloadedSize = 0;
+        this.local = {
+            files: [],
+            dirs: [],
+        };
+        this.remote = {
+            files: [],
+            dirs: [],
+        };
+        this.ftpConnection.close();
+    }
+
     /**
      * @private
      */
@@ -205,11 +272,11 @@ class Sync {
      * @private
      */
     processAddFileQueue = (callback) => {
-        if (this.addQueue.length === 0) {
+        if (this.addFileQueue.length === 0) {
             callback(null, "no additions");
             return;
         }
-        async.mapLimit(this.addQueue, this.settings.connections, this.remoteUtil.download, (err) => {
+        async.mapLimit(this.addFileQueue, this.settings.connections, this.remoteUtil.download, (err) => {
             if (err) {
                 this.logger.error("Additions failed.");
                 return callback(err);
@@ -223,11 +290,11 @@ class Sync {
      * @private
      */
     processUpdateQueue = (callback) => {
-        if (this.updateQueue.length === 0) {
+        if (this.updateFileQueue.length === 0) {
             callback(null, "no updates");
             return;
         }
-        async.mapLimit(this.updateQueue, this.settings.connections, this.remoteUtil.download, (err) => {
+        async.mapLimit(this.updateFileQueue, this.settings.connections, this.remoteUtil.download, (err) => {
             if (err) {
                 this.logger.error("Updates failed.");
                 return callback(err);
@@ -306,30 +373,27 @@ class Sync {
      * @param {*[]} localFiles
      */
     consolidateFiles(remoteFiles, localFiles) {
-        // prepare the files lists for comparison
-        let remoteFilePaths = remoteFiles.map((file) => file.id);
-        let localFilePaths = localFiles.map((file) => file.id);
 
+        const processedLocalFileIndexes = [];
         // compare files for modifications
-        remoteFilePaths.forEach((file) => {
-            let lIDX = localFilePaths.indexOf(file);
+        remoteFiles.forEach((rFile, rIDX) => {
+            let lIDX = localFiles.findIndex((f) => (f.id === rFile.id));
             // if a match is found
             if (lIDX !== -1) {
-                const rIDX = remoteFilePaths.indexOf(file);
                 const lFile = localFiles[lIDX];
-                const rFile = this.remote.files[rIDX];
                 if (Sync.isDifferent(lFile, rFile) ||
                     Sync.isModified(lFile, rFile)) {
-                    this.updateQueue.push(file);
+                    this.updateFileQueue.push(rFile);
                 }
                 // mark updates as processed
-                localFilePaths[lIDX] = "";
-                remoteFilePaths[rIDX] = "";
+
+                processedLocalFileIndexes.push(lIDX);
+            } else {
+                this.addFileQueue.push(rFile);
             }
         });
 
-        this.removeFileQueue = localFilePaths.filter((f) => f !== "");
-        this.addQueue = remoteFilePaths.filter((f) => f !== "");
+        this.removeFileQueue = localFiles.filter((f, index) => !processedLocalFileIndexes.includes(index));
     }
 
     /**
@@ -387,6 +451,36 @@ class Sync {
 
         return filteredFiles;
     }
+
+    /**
+     * @private
+     * @return {number}
+     */
+    calculateTotalDownloadSize = () => {
+        let total = 0;
+        total += this.sumFileSizes(this.addFileQueue);
+        total += this.sumFileSizes(this.updateFileQueue);
+
+        return total;
+    }
+
+    /**
+     * @private
+     * @param {{size: number}[]} files
+     * @return {number}
+     */
+    sumFileSizes = (files) => {
+        return files.reduce((prev, curr) => prev + curr.size, 0);
+    }
+
+    /**
+     * @private
+     * @return {number}
+     */
+    calculateTotalNumberOfChanges = () => {
+        return this.removeFileQueue.length + this.rmdirQueue.length + this.addFileQueue.length + this.removeFileQueue.length + this.updateFileQueue.length;
+    }
+
 
     /**
      * compare local vs remote file sizes
