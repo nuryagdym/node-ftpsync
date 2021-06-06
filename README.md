@@ -6,6 +6,10 @@ An Remote to Local FTP synchronization library for NodeJS based on
 ### Requirements
 - NodeJS `>=12.10.0`
 
+###Installation
+
+`npm i nodejs-ftpsync`
+
 #### Usage
 You can find usage example in [example.js](example.js) file.
 
