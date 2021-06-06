@@ -26,19 +26,25 @@ class RemoteUtil {
     _logger;
 
     totalDownloadedSize = 0;
+    _retryLimit;
 
     /**
-     * @param {Client} ftp FTP connection
+     * @param {object} ftpConfig FTP connection
      * @param {string} basePath path on remote connection
      * @param {string} localBasePath path on local device
      * @param {string[]} ignore list of ignored paths
      * @param logger
+     * @param {int} retryLimit
      * @param {boolean} verbose
      */
-    constructor(ftp, basePath, localBasePath, ignore, logger, verbose = false) {
+    constructor(ftpConfig, basePath, localBasePath, ignore, logger, retryLimit = 3, verbose = false) {
         this._ignore = ignore;
         this._localBasePath = localBasePath;
-        this._ftp = ftp;
+        this._ftpConfig = ftpConfig;
+        this._retryLimit = retryLimit;
+        // create the ftp instance
+        this._ftp = new BasicFTP.Client();
+        //this._ftp.ftp.verbose = verbose;
         this._basePath = basePath;
         this._logger = logger;
         this._verbose = verbose;
@@ -68,7 +74,7 @@ class RemoteUtil {
         let files = [];
 
         // walk the directory
-        const list = await this._ftp.list(currentPath);
+        let list = await this.ftpList(currentPath);
 
         for (let i = 0; i < list.length; i++) {
 
@@ -107,6 +113,22 @@ class RemoteUtil {
         return {files, dirs};
     }
 
+    async setUpConnection() {
+
+        const accessFn = this._ftp.access.bind(this._ftp, this._ftpConfig);
+        return await this.retryConnect(accessFn, this._retryLimit);
+    }
+
+    async ftpList(currentPath) {
+        const listFn = this._ftp.list.bind(this._ftp, currentPath);
+        return await this.retry(listFn, this._retryLimit);
+    }
+
+    async ftpDownloadTo(remote, local) {
+        const downloadFn = this._ftp.downloadTo.bind(this._ftp, remote, local);
+        return await this.retry(downloadFn, this._retryLimit);
+    }
+
     /**
      * @param {{id: string, size: number}} file
      * @param {function} callback
@@ -118,7 +140,8 @@ class RemoteUtil {
         if (this._verbose) {
             this._logger.info("downloading: ", local, remote);
         }
-        this._ftp.downloadTo(remote, local).then(() => {
+
+        this.ftpDownloadTo(remote, local).then(() => {
             if (this._verbose) {
                 this._logger.info("-", file.id, "downloaded successfully");
             }
@@ -130,6 +153,56 @@ class RemoteUtil {
         });
     }
 
+    /**
+     * retries to open FTP connection given times until it resolves.
+     * FTP connections often faces with "ETIMEDOUT" error,
+     * that is why we need to retry when we get this error
+     * @private
+     * @param {Function} fn
+     * @param {number} retries
+     * @param err
+     * @return {Promise}
+     */
+    retryConnect = (fn, retries= 3, err= null) => {
+        if (err) {
+            this._logger.error('FTP error', err);
+            if ("ETIMEDOUT" !== err.code) {
+                return Promise.reject(err);
+            }
+        }
+        if (!retries) {
+            return Promise.reject(err);
+        }
+        return fn().catch(async (err) => {
+            return this.retryConnect(fn, (retries - 1), err);
+        });
+    }
+
+    /**
+     * runs FTP function given times until it resolves.
+     * FTP connections often faces with "ETIMEDOUT" error,
+     * that is why we need to retry when we get this error
+     * @private
+     * @param {Function} fn
+     * @param {number} retries
+     * @param err
+     * @return {Promise}
+     */
+    retry = (fn, retries= 3, err=null) => {
+        if (err) {
+            this._logger.error('FTP error', JSON.stringify(err));
+            if ("ETIMEDOUT" !== err.code) {
+                return Promise.reject(err);
+            }
+        }
+        if (!retries) {
+            return Promise.reject(err);
+        }
+        return fn().catch(async (err) => {
+            await this.setUpConnection();
+            return this.retry(fn, (retries - 1), err);
+        });
+    }
 }
 
 module.exports = RemoteUtil;

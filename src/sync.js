@@ -1,4 +1,3 @@
-const BasicFTP = require("basic-ftp");
 const async = require("async");
 const LocalUtil = require("./local-util");
 const RemoteUtil = require("./remote-util");
@@ -6,11 +5,6 @@ const RemoteUtil = require("./remote-util");
 class Sync {
     settings;
     ftpConnectionConfig;
-
-    /**
-     * @type {Client}
-     */
-    ftpConnection = null;
 
     /**
      * @type {{dirs: *[], files: *[]}}
@@ -63,6 +57,7 @@ class Sync {
             //TODO more than 1 connection causes error: "User launched a task while another one is still running"
             "connections": config.connections || 1,
             "verbose": config.verbose || false,
+            "retryLimit": config.retryLimit || 3,
         };
 
         this.ftpConnectionConfig = {
@@ -72,9 +67,6 @@ class Sync {
             "password": config.pass || "guest",
             keepalive: 30000,
         }
-
-        // create the ftp instance
-        this.ftpConnection = new BasicFTP.Client();
 
         this.logger = logger;
     }
@@ -90,16 +82,15 @@ class Sync {
             this.logger.info("Settings:", this.settings);
         }
 
-        //this.ftpConnection.ftp.verbose = this.settings.verbose;
-        this.ftpConnection.access(this.ftpConnectionConfig).then(() => {
-            this.localUtil = new LocalUtil(this.settings.local, this.settings.ignore, this.logger, this.settings.verbose);
-            this.remoteUtil = new RemoteUtil(this.ftpConnection, this.settings.remote, this.settings.local, this.settings.ignore, this.logger, this.settings.verbose);
+        this.localUtil = new LocalUtil(this.settings.local, this.settings.ignore, this.logger, this.settings.verbose);
+        this.remoteUtil = new RemoteUtil(this.ftpConnectionConfig, this.settings.remote, this.settings.local, this.settings.ignore, this.logger, this.settings.retryLimit, this.settings.verbose);
+        this.remoteUtil.setUpConnection().then(() => {
             this.logger.debug("Setup complete.");
             callback(null);
         }).catch((err) => {
             this.logger.error("Setup failed.", err);
             callback("error", err);
-        })
+        });
     }
 
     collect = (callback) => {

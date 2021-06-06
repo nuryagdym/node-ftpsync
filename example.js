@@ -18,6 +18,8 @@ let config = {
         "/backgrounds"
     ],
     "connections": 1,
+    //retry times on ETIMEDOUT error
+    "retryLimit": 3,
     "verbose": false
 };
 
