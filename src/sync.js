@@ -69,6 +69,9 @@ class Sync {
         }
 
         this.logger = logger;
+
+        this.localUtil = new LocalUtil(this.settings.local, this.settings.ignore, this.logger, this.settings.verbose);
+        this.remoteUtil = new RemoteUtil(this.ftpConnectionConfig, this.settings.remote, this.settings.local, this.settings.ignore, this.logger, this.settings.retryLimit, this.settings.verbose);
     }
 
     setUp = (callback) => {
@@ -82,8 +85,6 @@ class Sync {
             this.logger.info("Settings:", this.settings);
         }
 
-        this.localUtil = new LocalUtil(this.settings.local, this.settings.ignore, this.logger, this.settings.verbose);
-        this.remoteUtil = new RemoteUtil(this.ftpConnectionConfig, this.settings.remote, this.settings.local, this.settings.ignore, this.logger, this.settings.retryLimit, this.settings.verbose);
         this.remoteUtil.setUpConnection().then(() => {
             this.logger.debug("Setup complete.");
             callback(null);
@@ -219,7 +220,7 @@ class Sync {
             numOfLocalFiles: this.local.files.length,
             numOfRemoteFiles: this.remote.files.length,
             totalDownloadSize: this.totalDownloadSize,
-            totalDownloadedSize: (this.remoteUtil ? this.remoteUtil.totalDownloadedSize : 0),
+            totalDownloadedSize: this.remoteUtil.totalDownloadedSize,
             totalLocalSize: this.totalLocalSize,
             totalRemoteSize: this.totalRemoteSize,
         }
@@ -238,7 +239,6 @@ class Sync {
             files: [],
             dirs: [],
         };
-        this.ftpConnection.close();
     }
 
     /**
