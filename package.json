@@ -1,12 +1,33 @@
 {
-  "name": "node-ftpsync",
+  "name": "nodejs-ftpsync",
   "version": "0.1.0",
   "description": "Remote to local file synchronization over FTP",
+  "main": "src/sync.js",
+  "keywords": [
+    "ftp",
+    "client",
+    "transfer",
+    "remote",
+    "local",
+    "sync",
+    "synchronise"
+  ],
+  "author": {
+    "name": "nuryagdy mustapayev",
+    "email": "nuryagdy@mustapayev.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nuryagdym/node-ftpsync.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nuryagdym/node-ftpsync/issues"
+  },
+  "homepage": "https://github.com/nuryagdym/node-ftpsync#readme",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "author": "nuryagdy mustapayev",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "async": "^3.2.0",
     "basic-ftp": "^4.6.6",
