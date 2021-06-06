@@ -228,7 +228,7 @@ class Sync {
             numOfLocalFiles: this.local.files.length,
             numOfRemoteFiles: this.remote.files.length,
             totalDownloadSize: this.totalDownloadSize,
-            totalDownloadedSize: this.remoteUtil.totalDownloadedSize,
+            totalDownloadedSize: (this.remoteUtil ? this.remoteUtil.totalDownloadedSize : 0),
             totalLocalSize: this.totalLocalSize,
             totalRemoteSize: this.totalRemoteSize,
         }
