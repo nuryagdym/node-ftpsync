@@ -22,7 +22,10 @@ let config = {
     "retryLimit": 3,
     "verbose": false
 };
-
+/**
+ * console as a logger or any other logger that supports `info`, `debug`, `error` methods
+ * @type {Sync}
+ */
 const synchronizer = new Sync(config, console);
 
 const interval = setInterval(() => {
