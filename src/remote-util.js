@@ -45,10 +45,12 @@ class RemoteUtil {
     }
 
     walk = (dir, callback) => {
+        this._logger.debug("walk remote started.");
         this._next(dir).then((result) => {
+            this._logger.debug("walk remote complete.");
             callback(null, result);
         }).catch((e) => {
-            this._logger.error(e);
+            this._logger.error("walk remote failed.", e);
             callback("error");
         });
     }

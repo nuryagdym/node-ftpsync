@@ -35,9 +35,10 @@ class LocalUtil {
      * @param {function} callback
      */
     walk = (currentPath, callback) => {
-        this._logger.debug("walkLocal start");
-
-        callback(null, this._next(currentPath));
+        this._logger.debug("walk local started.");
+        const result = this._next(currentPath);
+        this._logger.debug("walk local complete.");
+        callback(null, result);
     }
 
     /**

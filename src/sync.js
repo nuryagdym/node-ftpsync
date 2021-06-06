@@ -276,6 +276,7 @@ class Sync {
             callback(null, "no additions");
             return;
         }
+        this.logger.debug("Additions started.");
         async.mapLimit(this.addFileQueue, this.settings.connections, this.remoteUtil.download, (err) => {
             if (err) {
                 this.logger.error("Additions failed.");
@@ -294,6 +295,7 @@ class Sync {
             callback(null, "no updates");
             return;
         }
+        this.logger.debug("Updates started.");
         async.mapLimit(this.updateFileQueue, this.settings.connections, this.remoteUtil.download, (err) => {
             if (err) {
                 this.logger.error("Updates failed.");
