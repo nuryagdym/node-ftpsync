@@ -1,6 +1,5 @@
-const minimatch = require("minimatch");
 const BasicFTP = require("basic-ftp");
-const {trimPathRoot} = require("./helpers");
+const {trimPathRoot, isIgnored} = require("./helpers");
 
 class RemoteUtil {
 
@@ -75,7 +74,11 @@ class RemoteUtil {
             const itemFullPath = currentPath + "/" + item.name;
 
             // skip ignore files
-            if (this.isIgnored(trimPathRoot(this._basePath, itemFullPath))) {
+            const relativePath = trimPathRoot(this._basePath, itemFullPath);
+            if (isIgnored(this._ignore, relativePath)) {
+                if (this._verbose) {
+                    this._logger.info("ignored path: ", relativePath);
+                }
                 continue;
             }
 
@@ -125,17 +128,6 @@ class RemoteUtil {
         });
     }
 
-    isIgnored = (path) => {
-        for (let i = 0, len = this._ignore.length; i < len; i++) {
-            if (minimatch(path, this._ignore[i], {matchBase: true})) {
-                if (this._verbose) {
-                    this._logger.info("ignored path: ", path);
-                }
-                return true;
-            }
-        }
-        return false;
-    }
 }
 
 module.exports = RemoteUtil;

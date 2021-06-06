@@ -1,6 +1,5 @@
-const minimatch = require('minimatch');
 const fs = require('fs');
-const {trimPathRoot} = require('./helpers');
+const {trimPathRoot, isIgnored} = require('./helpers');
 
 class LocalUtil {
     /**
@@ -57,7 +56,11 @@ class LocalUtil {
             const itemFullPath = currentPath + "/" + item;
 
             // skip ignore files
-            if (this.isIgnored(trimPathRoot(this._basePath, itemFullPath))) {
+            const relativePath = trimPathRoot(this._basePath, itemFullPath);
+            if (isIgnored(this._ignore, relativePath)) {
+                if (this._verbose) {
+                    this._logger.info("ignored path: ", relativePath);
+                }
                 return;
             }
 
@@ -136,18 +139,6 @@ class LocalUtil {
             }
             callback(null, file);
         });
-    }
-
-    isIgnored = (path) => {
-        for (let i = 0, len = this._ignore.length; i < len; i++) {
-            if (minimatch(path, this._ignore[i], {matchBase: true})) {
-                if (this._verbose) {
-                    this._logger.info("ignored path: ", path);
-                }
-                return true;
-            }
-        }
-        return false;
     }
 }
 
