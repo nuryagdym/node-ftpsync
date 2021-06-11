@@ -1,4 +1,4 @@
-# nodejs-ftpsync
+# node-ftpsync
 
 An Remote to Local FTP synchronization library for NodeJS based on 
 [basic-ftp](https://www.npmjs.com/package/basic-ftp).
@@ -8,7 +8,7 @@ An Remote to Local FTP synchronization library for NodeJS based on
 
 ###Installation
 
-`npm i nodejs-ftpsync`
+`npm i node-ftpsync`
 
 #### Usage
 You can find usage example in [example.js](example.js) file.
@@ -19,7 +19,7 @@ You can find usage example in [example.js](example.js) file.
 
 example configuration
 
-```js
+```json
 {
   "local": "~/www/",
   "remote": "/",
@@ -32,7 +32,7 @@ example configuration
   "ignore": [
     ".htaccess",
     "*.mp3",
-    "/.idea",
+    "/.idea"
   ]
 }
 ```
@@ -138,15 +138,15 @@ these queues in order.
 
 Can be used to get the progress status of `ftpsync.run()`.
 Returns following object:
-```js
+```json
 {                     
-    numOfChanges: 233,
-    numOfLocalFiles: 121,
-    numOfRemoteFiles: 176,
-    totalDownloadSize: 91791972,
-    totalDownloadedSize: 0,
-    totalLocalSize: 38663190,
-    totalRemoteSize: 95514914
+    "numOfChanges": 233,
+    "numOfLocalFiles": 121,
+    "numOfRemoteFiles": 176,
+    "totalDownloadSize": 91791972,
+    "totalDownloadedSize": 0,
+    "totalLocalSize": 38663190,
+    "totalRemoteSize": 95514914
 }
 ```
 - `numOfChanges` - `== ftpsync.removeFileQueue.length + ftpsync.rmdirQueue.length + ftpsync.addFileQueue.length + ftpsync.removeFileQueue.length + ftpsync.updateFileQueue.length`;
