@@ -125,18 +125,18 @@ class LocalUtil {
     }
 
     /**
-     * @param {string} file
+     * @param {{id: string}} file
      * @param {function} callback
      */
     remove = (file, callback) => {
-        file = this._basePath + file;
-        fs.unlink(file, (err, data) => {
+        const fullPath = this._basePath + file.id;
+        fs.unlink(fullPath, (err, data) => {
             if (err) {
                 this._logger.error("Remove failed.");
                 return callback(err);
             }
             if (this._verbose) {
-                this._logger.info("-", file, "deleted successfully");
+                this._logger.info("-", file.id, "deleted successfully");
             }
             callback(null, file);
         });
