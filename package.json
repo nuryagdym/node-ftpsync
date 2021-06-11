@@ -1,5 +1,5 @@
 {
-  "name": "nodeja-ftpsync",
+  "name": "node-ftpsync",
   "version": "0.1.1",
   "description": "Remote to local file synchronization over FTP",
   "main": "src/sync.js",
