@@ -1,5 +1,5 @@
 {
-  "name": "nodejs-ftpsync",
+  "name": "node-ftpsync",
   "version": "0.1.0",
   "description": "Remote to local file synchronization over FTP",
   "main": "src/sync.js",
@@ -35,5 +35,11 @@
   },
   "engines": {
     "node": ">=12.10.0"
-  }
+  },
+  "files": [
+    "/src",
+    "/package.json",
+    "README.md",
+    "example.js"
+  ]
 }
