@@ -26,6 +26,7 @@ class RemoteUtil {
     _logger;
 
     totalDownloadedSize = 0;
+    totalUploadedSize = 0;
     _retryLimit;
 
     /**
@@ -56,11 +57,10 @@ class RemoteUtil {
             this._logger.debug("walk remote complete.");
             callback(null, result);
         }).catch((e) => {
-            this._logger.error("walk remote failed.", e);
-            callback("error");
+            this._logger.error("walk remote failed.", JSON.stringify(e));
+            callback("error", e);
         });
     }
-
 
     /**
      * recursively walks over directories
@@ -115,18 +115,108 @@ class RemoteUtil {
 
     async setUpConnection() {
 
-        const accessFn = this._ftp.access.bind(this._ftp, this._ftpConfig);
-        return await this.retryConnect(accessFn, this._retryLimit);
+        const ftpFn = this._ftp.access.bind(this._ftp, this._ftpConfig);
+        return await this.retryConnect(ftpFn, this._retryLimit);
     }
 
     async ftpList(currentPath) {
-        const listFn = this._ftp.list.bind(this._ftp, currentPath);
-        return await this.retry(listFn, this._retryLimit);
+        const ftpFn = this._ftp.list.bind(this._ftp, currentPath);
+        return await this.retry(ftpFn, this._retryLimit);
     }
 
     async ftpDownloadTo(remote, local) {
-        const downloadFn = this._ftp.downloadTo.bind(this._ftp, remote, local);
-        return await this.retry(downloadFn, this._retryLimit);
+        const ftpFn = this._ftp.downloadTo.bind(this._ftp, remote, local);
+        return await this.retry(ftpFn, this._retryLimit);
+    }
+
+    async ftpUploadFrom(local, remote) {
+        const ftpFn = this._ftp.uploadFrom.bind(this._ftp, local, remote);
+        return await this.retry(ftpFn, this._retryLimit);
+    }
+
+    async ftpRemove(path) {
+        const ftpFn = this._ftp.remove.bind(this._ftp, path);
+        return await this.retry(ftpFn, this._retryLimit);
+    }
+
+    async ftpMkDir(remoteDirPath) {
+        const ftpFn = this._ftp.ensureDir.bind(this._ftp, remoteDirPath);
+        return await this.retry(ftpFn, this._retryLimit);
+    }
+
+    async ftpRmDir(remoteDirPath) {
+        const ftpFn = this._ftp.removeDir.bind(this._ftp, remoteDirPath);
+        return await this.retry(ftpFn, this._retryLimit);
+    }
+
+    /**
+     * @param {string} dir
+     * @param {function} callback
+     */
+    rmdir = (dir, callback) => {
+        this.ftpRmDir(this._basePath + dir).then(() => {
+            if (this._verbose) {
+                this._logger.info("-", dir, "remote  rmdir successfully");
+            }
+            callback(null, dir);
+        }).catch((err) => {
+            this._logger.error("remote rmdir failed.", err);
+            callback(err);
+        });
+    }
+
+    /**
+     * @param {string} dir
+     * @param {function} callback
+     */
+    mkdir = (dir, callback) => {
+        this.ftpMkDir(this._basePath + dir).then((err, data) => {
+            if (this._verbose) {
+                this._logger.info("-", dir, "remote  mkdir successfully");
+            }
+            callback(null, dir);
+        }).catch((err) => {
+            this._logger.error("remote mkdir failed.", err);
+            callback(err);
+        });
+    }
+
+    /**
+     * @param {{id: string}} file
+     * @param {function} callback
+     */
+    remove = (file, callback) => {
+        this.ftpRemove(this._basePath + file.id).then((err, data) => {
+            if (this._verbose) {
+                this._logger.info("-", file.id, "remote remove successfully");
+            }
+            callback(null, file);
+        }).catch((err) => {
+            this._logger.error("remote remove failed.", err);
+            callback(err);
+        });
+    }
+
+    /**
+     * @param {{id: string, size: number}} file
+     * @param {function} callback
+     */
+    upload = (file, callback) => {
+        const local = this._localBasePath + file.id;
+        const remote = this._basePath + file.id;
+        if (this._verbose) {
+            this._logger.info("uploading: ", local, remote);
+        }
+        this.ftpUploadFrom(local, remote).then((err, data) => {
+            if (this._verbose) {
+                this._logger.info("-", file.id, "remote remove successfully");
+            }
+            this.totalUploadedSize += file.size;
+            callback(null, file);
+        }).catch((err) => {
+            this._logger.error("remote remove failed.", err);
+            callback(err);
+        });
     }
 
     /**
@@ -165,7 +255,7 @@ class RemoteUtil {
      */
     retryConnect = (fn, retries= 3, err= null) => {
         if (err) {
-            this._logger.error('FTP error', err);
+            this._logger.error('FTP error', JSON.stringify(err));
             if ("ETIMEDOUT" !== err.code) {
                 return Promise.reject(err);
             }

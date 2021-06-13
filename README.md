@@ -1,7 +1,10 @@
 # node-ftpsync
 
-An Remote to Local FTP synchronization library for NodeJS based on 
+A Remote to Local and Local to Remote FTP synchronization library for NodeJS based on 
 [basic-ftp](https://www.npmjs.com/package/basic-ftp).
+
+**Notice: This application will delete files and directories on the remote server/local device to match the local/remote machine.
+Use this library in production at your own risk.**
 
 ### Requirements
 - NodeJS `>=12.10.0`
@@ -11,13 +14,30 @@ An Remote to Local FTP synchronization library for NodeJS based on
 `npm i node-ftpsync`
 
 #### Usage
-You can find usage example in [example.js](example.js) file.
+```js
+const {Rem2LocSync, Loc2RemSync} = require("node-ftpsync");
+const config = require("./config.json");
+/**
+ * console as a logger or any other logger that supports `info`, `debug`, `error` methods
+ * @type {BaseSync}
+ */
+// for Remote to Local synchronization
+//const synchronizer = new Rem2LocSync(config, console);
 
-#### Run the example script
+// for Local to Remote synchronization
+const synchronizer = new Loc2RemSync(config, console);
 
-`node example.js`
+const interval = setInterval(() => {
+    console.log("synchronizer status", synchronizer.getUpdateStatus());
+}, 5000);
+synchronizer.run((err, results) => {
+    clearInterval(interval);
+    console.log("run response", synchronizer.getUpdateStatus());
+})
+```
+You can find usage more examples in [example.js](example.js) file.
 
-example configuration
+#### Configuration
 
 ```json
 {
@@ -52,7 +72,7 @@ example configuration
 The file and directory listings for the local host.
 
 - `ftpsync.local.dirs` - contains a string array. Each path represents a local directory.
-- `ftpsync.local.files` - contains a list of objects. Each object in the list represents a file and contains a `id`, `size`, and `time` attribute with the requisite values for that file.
+- `ftpsync.local.files` - contains a list of objects. Each object in the list represents a file and contains a `id` (path), `size`, and `time` attribute with the requisite values for that file.
 
 Populated by running `ftpsync.collect()` or `ftpsync.localUtil.walk()`.
 
@@ -61,41 +81,41 @@ Populated by running `ftpsync.collect()` or `ftpsync.localUtil.walk()`.
 The file and directory listings for the remote host.
 
 - `ftpsync.remote.dirs` - contains a string array. Each path represents a remote directory.
-- `ftpsync.remote.files` - contains a list of objects. Each object in the list represents a file and contains a `id`, `size`, and `time` attribute with the requisite values for that file.
+- `ftpsync.remote.files` - contains a list of objects. Each object in the list represents a file and contains a `id` (path), `size`, and `time` attribute with the requisite values for that file.
 
 Populated by running `ftpsync.collect()` or `ftpsync.remoteUtil.walk()`.
 
 #### ftpsync.mkdirQueue[]
 
-The list of directories queued for creation on the local device.
+The list of directories queued for creation.
 
 Populated by running `ftpsync.consolidate()`.
 
 #### ftpsync.rmdirQueue[]
 
-The list of directories queued for deletion on the local device.
+The list of directories queued for deletion.
 
-**Note:** If parent and its sub directory is going to be deleted, then this array will contain only parent directory.
+**Note:** On Remote to Local synchronization if parent and its sub directory is going to be deleted, then this array will contain only parent directory.
 
 Populated by running `ftpsync.consolidate()`.
 
 #### ftpsync.addFileQueue[]
 
-The list of files queued for addition on the local device.
+The list of files queued for addition.
 
 Populated by running `ftpsync.consolidate()`.
 
 #### ftpsync.updateFileQueue[]
 
-The list of files queued for an update on the local device.
+The list of files queued for an update.
 
 Populated by running `ftpsync.consolidate()`.
 
 #### ftpsync.removeFileQueue[]
 
-The list of files queued for removal from the local device.
+The list of files queued for removal.
 
-**Note:** if a directory is going to be removed then files in this directory will not be listed in this list.
+**Note:** On Remote to Local synchronization if a directory is going to be removed then files in this directory will not be listed in this list.
 
 Populated by running `ftpsync.consolidate()`.
 
@@ -112,16 +132,20 @@ It tries to open an FTP connection.
 
 #### ftpsync.collect(callback)
 
-Walks the file trees for both the local host and remote server and prepares them for further processing. The resulting file lists are stored in `ftpsync.local[]`, and `ftpsync.remote[]` upon successful completion.
+Walks file trees for both the local host and remote server and prepares them for further processing. The resulting file lists are stored in `ftpsync.local[]`, and `ftpsync.remote[]` upon successful completion.
 
 #### ftpsync.consolidate(callback)
 
 Runs comparisons on the local and remote file listings.
-
-- Files/directories that exist in the local directory but not in the remote server are queued up for removal.
-- Files/directories that exist in on the remote directory but not the local are queued for addition.
-- Files that exist in both but are different (determined by file size and time stamp) are queued for update.
 - The resulting queues can be found in `mkdirQueue[]`, `rmdirQueue[]`, `addFileQueue[]`, `updateFileQueue[]`, and `removeFileQueue[]` upon successful completion.
+- Files that exist in both on remote and local but are different (determined by file size and time stamp) are queued for update.
+- ignored paths will not be touched.
+##### Remote To Local Sync 
+- Files/directories that exist on the local directory but not on the remote directory are queued for removal.
+- Files/directories that exist on the remote directory but not on the local directory are queued for addition.
+##### Local To Remote Sync
+- Files/directories that exist on the remote directory but not on the local directory are queued up for removal.
+- Files/directories that exist on the local directory but not on the remote directory are queued for addition.
 
 #### ftpsync.commit(callback)
 
@@ -132,7 +156,7 @@ Processes
 4. `removeFileQueue[]`
 5. `rmdirQueue[]`
 
-these queues in order.
+these queues one by one.
 
 #### ftpsync.getUpdateStatus()
 
@@ -143,17 +167,17 @@ Returns following object:
     "numOfChanges": 233,
     "numOfLocalFiles": 121,
     "numOfRemoteFiles": 176,
-    "totalDownloadSize": 91791972,
+    "totalTransferSize": 91791972,
     "totalDownloadedSize": 0,
     "totalLocalSize": 38663190,
     "totalRemoteSize": 95514914
 }
 ```
-- `numOfChanges` - `== ftpsync.removeFileQueue.length + ftpsync.rmdirQueue.length + ftpsync.addFileQueue.length + ftpsync.updateFileQueue.length`;
+- `numOfChanges` - `== ftpsync.removeFileQueue.length + ftpsync.rmdirQueue.length + ftpsync.addFileQueue.length + ftpsync.updateFileQueue.length;`
 - `numOfLocalFiles` - `== ftpsync.local.files.length`.
 - `numOfRemoteFiles` - `== ftpsync.remote.files.length`.
-- `totalDownloadSize` - `== sumFileSizes(ftpsync.addFileQueue) + sumFileSizes(ftpsync.updateFileQueue)`. total bytes that are going to be downloaded.
-- `totalDownloadedSize` - in bytes, updated as files successfully downloaded. Should be equal to totalDownloadSize when commit() finishes successfully.
+- `totalTransferSize` - `== sumFileSizes(ftpsync.addFileQueue) + sumFileSizes(ftpsync.updateFileQueue)`. total bytes that are going to be downloaded/uploaded.
+- `totalTransferredSize` - in bytes, updated as files successfully downloaded/uploaded. Should be equal to `totalTransferSize` when commit() finishes successfully.
 - `totalLocalSize` - `== sumFileSizes(ftpsync.local.files)` in bytes
 - `totalRemoteSize` - `== sumFileSizes(ftpsync.remote.files)` in bytes
 
@@ -161,5 +185,5 @@ Roadmap
 -------
 ### Short Term
  - support for multiple FTP connections 
-### Long Term
- - remote to local sync functionality.
+ - unit tests
+ - command line support

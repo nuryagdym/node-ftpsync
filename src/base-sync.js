@@ -2,7 +2,7 @@ const async = require("async");
 const LocalUtil = require("./local-util");
 const RemoteUtil = require("./remote-util");
 
-class Sync {
+class BaseSync {
     settings;
     ftpConnectionConfig;
 
@@ -42,7 +42,7 @@ class Sync {
      */
     removeFileQueue = [];
 
-    totalDownloadSize = 0;
+    totalTransferSize = 0;
     totalNumOfChanges = 0;
     totalLocalSize = 0;
     totalRemoteSize = 0;
@@ -72,6 +72,17 @@ class Sync {
 
         this.localUtil = new LocalUtil(this.settings.local, this.settings.ignore, this.logger, this.settings.verbose);
         this.remoteUtil = new RemoteUtil(this.ftpConnectionConfig, this.settings.remote, this.settings.local, this.settings.ignore, this.logger, this.settings.retryLimit, this.settings.verbose);
+    }
+
+    /**
+     * compare local vs remote file sizes
+     * @param localFile
+     * @param remoteFile
+     *
+     * @returns {boolean}
+     */
+    static isDifferent = (localFile, remoteFile) => {
+        return localFile.size !== remoteFile.size;
     }
 
     setUp = (callback) => {
@@ -139,7 +150,7 @@ class Sync {
     }
 
     consolidate = (callback) => {
-        this.totalDownloadSize = 0;
+        this.totalTransferSize = 0;
         this.totalNumOfChanges = 0;
         this.logger.debug("Consolidating");
         if (this.settings.verbose) {
@@ -148,11 +159,8 @@ class Sync {
 
         this.consolidateDirectories(this.remote.dirs, this.local.dirs);
 
-        //if directory will be removed we can skip files located in those directories.
-        const localFiles = this.filtersFilesInGivenDirs(this.local.files, this.rmdirQueue);
-
-        this.consolidateFiles(this.remote.files, localFiles);
-        this.totalDownloadSize = this.calculateTotalDownloadSize();
+        this.consolidateFiles(this.remote.files, this.local.files);
+        this.totalTransferSize = this.calculateTotalTransferSize();
         this.totalNumOfChanges = this.calculateTotalNumberOfChanges();
 
         this.logger.debug(`Mkdir ${this.mkdirQueue.length} directories:`);
@@ -179,18 +187,7 @@ class Sync {
         if (this.settings.verbose) {
             this.logger.info("-------------------------------------------------------------");
         }
-        async.series([
-                // add directories
-                this.processMkdirQueue,
-                // add files
-                this.processAddFileQueue,
-                // update files
-                this.processUpdateQueue,
-                // remove dirs
-                this.processRemoveDirQueue,
-                // remove files
-                this.processRemoveFileQueue,
-            ],
+        async.series(this.commitCmdQueue,
             (err, results) => {
                 if (err) {
                     this.logger.error("Commit failed.", err);
@@ -214,15 +211,14 @@ class Sync {
         ], callback);
     }
 
-    getUpdateStatus = () => {
+    getUpdateStatus() {
         return {
             numOfChanges: this.totalNumOfChanges,
             numOfLocalFiles: this.local.files.length,
             numOfRemoteFiles: this.remote.files.length,
-            totalDownloadSize: this.totalDownloadSize,
-            totalDownloadedSize: this.remoteUtil.totalDownloadedSize,
             totalLocalSize: this.totalLocalSize,
             totalRemoteSize: this.totalRemoteSize,
+            totalTransferSize: this.totalTransferSize,
         }
     }
 
@@ -231,6 +227,7 @@ class Sync {
         this.totalLocalSize = 0;
         this.totalRemoteSize = 0;
         this.remoteUtil.totalDownloadedSize = 0;
+        this.remoteUtil.totalUploadedSize = 0;
         this.local = {
             files: [],
             dirs: [],
@@ -242,158 +239,80 @@ class Sync {
     }
 
     /**
-     * @private
+     * @protected
+     * @returns {Function[]}
+     */
+    get commitCmdQueue() {
+        return [];
+    }
+
+    /**
+     * @protected
      */
     processMkdirQueue = (callback) => {
-        if (this.mkdirQueue.length === 0) {
-            callback(null, "no mkdirs");
-            return;
-        }
-        async.mapLimit(this.mkdirQueue, this.settings.connections, this.localUtil.mkdir, (err) => {
-            if (err) {
-                this.logger.error("MKDIRs failed.");
-                return callback(err);
-            }
-            this.logger.debug("MKDIRs complete.");
-            callback(null);
-        });
+        callback(null);
     }
 
     /**
-     * @private
+     * @protected
      */
     processAddFileQueue = (callback) => {
-        if (this.addFileQueue.length === 0) {
-            callback(null, "no additions");
-            return;
-        }
-        this.logger.debug("Additions started.");
-        async.mapLimit(this.addFileQueue, this.settings.connections, this.remoteUtil.download, (err) => {
-            if (err) {
-                this.logger.error("Additions failed.");
-                return callback(err);
-            }
-            this.logger.debug("Additions complete.");
-            callback(null);
-        });
+        callback(null);
     }
 
     /**
-     * @private
+     * @protected
      */
     processUpdateQueue = (callback) => {
-        if (this.updateFileQueue.length === 0) {
-            callback(null, "no updates");
-            return;
-        }
-        this.logger.debug("Updates started.");
-        async.mapLimit(this.updateFileQueue, this.settings.connections, this.remoteUtil.download, (err) => {
-            if (err) {
-                this.logger.error("Updates failed.");
-                return callback(err);
-            }
-            this.logger.debug("Updates complete.");
-            callback(null);
-        });
+        callback(null);
     }
 
     /**
-     * @private
+     * @protected
      */
     processRemoveFileQueue = (callback) => {
-        if (this.removeFileQueue.length === 0) {
-            callback(null, "no removals");
-            return;
-        }
-        async.mapLimit(this.removeFileQueue, this.settings.connections, this.localUtil.remove, (err) => {
-            if (err) {
-                this.logger.error("Removals failed.");
-                return callback(err);
-            }
-            this.logger.debug("Removals complete");
-            callback(null);
-        });
+        callback(null);
     }
 
     /**
-     * @private
+     * @protected
      */
     processRemoveDirQueue = (callback) => {
-        if (this.rmdirQueue.length === 0) {
-            callback(null, "no rmdirs");
-            return;
-        }
-        async.mapLimit(this.rmdirQueue, this.settings.connections, this.localUtil.rmdir, (err) => {
-            if (err) {
-                this.logger.error("RMDIRs failed.", err);
-                return callback(err);
-            }
-            this.logger.debug("RMDIRs complete.");
-            callback(null);
-        });
+        callback(null);
     }
 
     /**
-     * creates list of directories to be created and removed by comparing remote and local directories
-     * @private
+     * marks common directories
+     * @protected
      * @param {string[]} remoteDirs
      * @param {string[]} localDirs
      */
     consolidateDirectories(remoteDirs, localDirs) {
 
-        // compare directories for modifications
-        remoteDirs.forEach((dir) => {
+        remoteDirs.forEach((dir, rIDX) => {
             // if a match is found
-            let lIDX = localDirs.indexOf(dir);
+            const lIDX = localDirs.indexOf(dir);
             if (lIDX !== -1) {
-                let rIDX = remoteDirs.indexOf(dir);
                 localDirs[lIDX] = "";
                 remoteDirs[rIDX] = "";
             }
         });
-
-        // process the rest
-        let rmdirQueue = localDirs.filter((dir) => dir !== "");
-        this.mkdirQueue = remoteDirs.filter((dir) => dir !== "");
-
-        this.rmdirQueue = this.filtersSubDirsFromArray(rmdirQueue);
     }
 
     /**
      * creates list of files to be added and removed by comparing remote and local files
-     * @private
+     * @protected
      * @param {*[]} remoteFiles
      * @param {*[]} localFiles
      */
     consolidateFiles(remoteFiles, localFiles) {
-
-        const processedLocalFileIndexes = [];
-        // compare files for modifications
-        remoteFiles.forEach((rFile, rIDX) => {
-            let lIDX = localFiles.findIndex((f) => (f.id === rFile.id));
-            // if a match is found
-            if (lIDX !== -1) {
-                const lFile = localFiles[lIDX];
-                if (Sync.isDifferent(lFile, rFile) ||
-                    Sync.isModified(lFile, rFile)) {
-                    this.updateFileQueue.push(rFile);
-                }
-                // mark updates as processed
-
-                processedLocalFileIndexes.push(lIDX);
-            } else {
-                this.addFileQueue.push(rFile);
-            }
-        });
-
-        this.removeFileQueue = localFiles.filter((f, index) => !processedLocalFileIndexes.includes(index));
     }
 
     /**
      * if there is subdirectories they will be removed.
      * for example if there are ["/dir1", "/parent", "/parent/child", "/parent/child2", "/parent/child/sub-child"]
      * result will be ["/dir1", "/parent"]
-     * @private
+     * @protected
      * @param {string[]} dirs
      */
     filtersSubDirsFromArray(dirs) {
@@ -416,7 +335,7 @@ class Sync {
 
     /**
      * files that are located in given dir list will be filtered.
-     * @private
+     * @protected
      * @param {*[]} files
      * @param {string[]} dirs
      *
@@ -446,10 +365,11 @@ class Sync {
     }
 
     /**
-     * @private
+     * calculates total download/upload size
+     * @protected
      * @return {number}
      */
-    calculateTotalDownloadSize = () => {
+    calculateTotalTransferSize = () => {
         let total = 0;
         total += this.sumFileSizes(this.addFileQueue);
         total += this.sumFileSizes(this.updateFileQueue);
@@ -458,7 +378,7 @@ class Sync {
     }
 
     /**
-     * @private
+     * @protected
      * @param {{size: number}[]} files
      * @return {number}
      */
@@ -474,33 +394,100 @@ class Sync {
         return this.removeFileQueue.length + this.rmdirQueue.length + this.addFileQueue.length + this.updateFileQueue.length;
     }
 
-
     /**
-     * compare local vs remote file sizes
-     * @param localFile
-     * @param remoteFile
-     *
-     * @returns {boolean}
+     * @protected
      */
-    static isDifferent = (localFile, remoteFile) => {
-        return localFile.size !== remoteFile.size;
+    doProcessMkdirQueue = (callback, mkDirFn) => {
+        if (this.mkdirQueue.length === 0) {
+            callback(null, "no mkdirs");
+            return;
+        }
+        this.logger.debug("mkdirs started.");
+        async.mapLimit(this.mkdirQueue, this.settings.connections, mkDirFn, (err) => {
+            if (err) {
+                this.logger.error("mkdirs failed.");
+                return callback(err);
+            }
+            this.logger.debug("mkdirs complete.");
+            callback(null);
+        });
     }
 
     /**
-     * compare a local vs remote file time for modification
-     *
-     * @param localFile
-     * @param remoteFile
-     * @returns {boolean} return TRUE if remote file's modified date is later than local file's
+     * @protected
      */
-    static isModified = (localFile, remoteFile) => {
-        // round to the nearest minute
-        const minutes = 1000 * 60;
-        const lTime = new Date((Math.round(localFile.time.getTime() / minutes) * minutes));
-        const rTime = new Date((Math.round(remoteFile.time.getTime() / minutes) * minutes));
+    doProcessAddFileQueue = (callback, addFileFn) => {
+        if (this.addFileQueue.length === 0) {
+            callback(null, "no additions");
+            return;
+        }
+        this.logger.debug("Additions started.");
+        async.mapLimit(this.addFileQueue, this.settings.connections, addFileFn, (err) => {
+            if (err) {
+                this.logger.error("Additions failed.");
+                return callback(err);
+            }
+            this.logger.debug("Additions complete.");
+            callback(null);
+        });
+    }
 
-        return lTime < rTime;
+    /**
+     * @protected
+     */
+    doProcessUpdateQueue = (callback, updateFileFn) => {
+        if (this.updateFileQueue.length === 0) {
+            callback(null, "no updates");
+            return;
+        }
+        this.logger.debug("Updates started.");
+        async.mapLimit(this.updateFileQueue, this.settings.connections, updateFileFn, (err) => {
+            if (err) {
+                this.logger.error("Updates failed.");
+                return callback(err);
+            }
+            this.logger.debug("Updates complete.");
+            callback(null);
+        });
+    }
+
+    /**
+     * @protected
+     */
+    doProcessRemoveFileQueue = (callback, rmFileFn) => {
+        if (this.removeFileQueue.length === 0) {
+            callback(null, "no removals");
+            return;
+        }
+        this.logger.debug("Removals started.");
+        async.mapLimit(this.removeFileQueue, this.settings.connections, rmFileFn, (err) => {
+            if (err) {
+                this.logger.error("Removals failed.");
+                return callback(err);
+            }
+            this.logger.debug("Removals complete");
+            callback(null);
+        });
+    }
+
+    /**
+     * @protected
+     */
+    doProcessRemoveDirQueue = (callback, rmDirFn) => {
+        if (this.rmdirQueue.length === 0) {
+            callback(null, "no rmdirs");
+            return;
+        }
+        this.logger.debug("rmdirs started.");
+        async.mapLimit(this.rmdirQueue, this.settings.connections, rmDirFn, (err) => {
+            if (err) {
+                this.logger.error("rmdirs failed.", err);
+                return callback(err);
+            }
+            this.logger.debug("rmdirs complete.");
+            callback(null);
+        });
     }
 }
 
-module.exports = Sync;
+module.exports = BaseSync;

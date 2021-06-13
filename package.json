@@ -1,8 +1,8 @@
 {
   "name": "node-ftpsync",
-  "version": "0.1.2",
-  "description": "Remote to local file synchronization over FTP",
-  "main": "src/sync.js",
+  "version": "0.2.0",
+  "description": "A Remote to Local and Local to Remote synchronization over FTP",
+  "main": "src/index.js",
   "keywords": [
     "ftp",
     "client",
