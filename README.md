@@ -6,7 +6,7 @@ An Remote to Local FTP synchronization library for NodeJS based on
 ### Requirements
 - NodeJS `>=12.10.0`
 
-###Installation
+### Installation
 
 `npm i node-ftpsync`
 
@@ -149,7 +149,7 @@ Returns following object:
     "totalRemoteSize": 95514914
 }
 ```
-- `numOfChanges` - `== ftpsync.removeFileQueue.length + ftpsync.rmdirQueue.length + ftpsync.addFileQueue.length + ftpsync.removeFileQueue.length + ftpsync.updateFileQueue.length`;
+- `numOfChanges` - `== ftpsync.removeFileQueue.length + ftpsync.rmdirQueue.length + ftpsync.addFileQueue.length + ftpsync.updateFileQueue.length`;
 - `numOfLocalFiles` - `== ftpsync.local.files.length`.
 - `numOfRemoteFiles` - `== ftpsync.remote.files.length`.
 - `totalDownloadSize` - `== sumFileSizes(ftpsync.addFileQueue) + sumFileSizes(ftpsync.updateFileQueue)`. total bytes that are going to be downloaded.

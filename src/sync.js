@@ -467,11 +467,11 @@ class Sync {
     }
 
     /**
-     * @private
+     * @protected
      * @return {number}
      */
     calculateTotalNumberOfChanges = () => {
-        return this.removeFileQueue.length + this.rmdirQueue.length + this.addFileQueue.length + this.removeFileQueue.length + this.updateFileQueue.length;
+        return this.removeFileQueue.length + this.rmdirQueue.length + this.addFileQueue.length + this.updateFileQueue.length;
     }
 
 
