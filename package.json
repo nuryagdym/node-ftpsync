@@ -1,6 +1,6 @@
 {
   "name": "node-ftpsync",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A Remote to Local and Local to Remote synchronization over FTP",
   "main": "src/index.js",
   "keywords": [
