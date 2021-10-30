@@ -293,6 +293,12 @@ class RemoteUtil {
             return this.retry(fn, (retries - 1), err);
         });
     }
+
+    teardownConnection = () => {
+
+        const ftpFn = this._ftp.close();
+        return Promise.resolve();
+    }
 }
 
 module.exports = RemoteUtil;

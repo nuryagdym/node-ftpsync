@@ -198,6 +198,21 @@ class BaseSync {
             });
     }
 
+    teardown = (callback) => {
+        this.logger.debug("Teardown");
+        if (this.settings.verbose) {
+            this.logger.info("-------------------------------------------------------------");
+        }
+
+        this.remoteUtil.teardownConnection().then(() => {
+            this.logger.debug("Teardown complete.");
+            callback(null);
+        }).catch((err) => {
+            this.logger.error("Teardown failed.", err);
+            callback(err);
+        });
+    }
+
     run = (callback) => {
         return async.series([
             // setup
@@ -208,6 +223,8 @@ class BaseSync {
             this.consolidate,
             // commit
             this.commit,
+            // close remote connection
+            this.teardown,
         ], callback);
     }
 

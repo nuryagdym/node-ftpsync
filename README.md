@@ -49,6 +49,7 @@ You can find usage more examples in [example.js](example.js) file.
   "pass": "password",
   "connections": 1,
   "retryLimit": 3,
+  "verbose": true,
   "ignore": [
     ".htaccess",
     "*.mp3",
