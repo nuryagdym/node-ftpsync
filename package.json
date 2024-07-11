@@ -1,5 +1,6 @@
 {
   "name": "node-ftpsync",
+  "type": "commonjs",
   "version": "0.2.1",
   "description": "A Remote to Local and Local to Remote synchronization over FTP",
   "main": "src/index.js",
@@ -30,8 +31,8 @@
   "license": "MIT",
   "dependencies": {
     "async": "^3.2.0",
-    "basic-ftp": "^4.6.6",
-    "minimatch": "^3.0.4"
+    "basic-ftp": "^4.6.6 || ^5.0.0",
+    "minimatch": ">=3.0.4 <9.0.0"
   },
   "engines": {
     "node": ">=12.10.0"
