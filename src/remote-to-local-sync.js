@@ -13,12 +13,7 @@ class Rem2LocSync extends BaseSync {
      * @returns {boolean} return TRUE if remote file's modified date is later than local file's
      */
     static isModified = (localFile, remoteFile) => {
-        // round to the nearest minute
-        const minutes = 1000 * 60;
-        const lTime = new Date((Math.round(localFile.time.getTime() / minutes) * minutes));
-        const rTime = new Date((Math.round(remoteFile.time.getTime() / minutes) * minutes));
-
-        return lTime < rTime;
+        return localFile.time.getTime() < remoteFile.time.getTime();
     }
 
     getUpdateStatus() {
